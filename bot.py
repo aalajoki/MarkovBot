@@ -1,17 +1,25 @@
 import discord
+from discord.ext import commands
 import pickle
 import re
 
 # ID:
 # Icon source:
 
-client = discord.Client()
+#client = discord.Client()
+mainDict = {}
+
+
+description = "A silly bot that pretends to learn to speak."
+bot = commands.Bot(command_prefix="¤", description=description)
+
 
 # Attempt to open the file that contains all learned words
 try:
     with open("dict.txt","rb") as f:
         mainDict, firstwords = pickle.load(f)
         print("Dict file loaded")
+        
 # If file is not found, create a new one
 except FileNotFoundError:
     with open("dict.txt","wb") as f:
@@ -30,6 +38,7 @@ try:
         censor = pickle.load(f)
     print("Censor file loaded")
     print(censor)
+    
 # If file is not found, create a new one
 except FileNotFoundError:
     with open("censor.txt","wb") as f:
@@ -52,10 +61,12 @@ except FileNotFoundError:
 
 
 
-# The client event where someone in the discord server sends a message, allowing the bot to process it
-@client.event
+# The event where someone in the discord server sends a message, allowing the bot to process it
+@bot.event
 async def on_message(message):
     
+    # Using a temporary dictionary to prevent the bot from learning messages that do not pass the filters
+    global mainDict
     tempDict = mainDict
     # The bot will ignore messages from all bots, including itself
     if message.author.bot == True:
@@ -63,7 +74,8 @@ async def on_message(message):
         return
     
             
-    # DEBUG STUFF    
+    # DEBUG COMMANDS
+    
     if message.content == "!debug-r":
         print("-----------------")
         print("THE MAIN DICTIONARY:")
@@ -75,9 +87,8 @@ async def on_message(message):
             print(k, v)
         print("-----------------")
     
-    
     if message.content == "!debug-u":
-        mainDict['apple']['is'] += 1
+        mainDict["apple"]["is"] += 1
         with open("dict.txt", "wb") as f:
             pickle.dump([mainDict, firstwords], f)
             
@@ -85,15 +96,13 @@ async def on_message(message):
         await client.send_message(message.channel, msg)
         
         
-    #if message.content.startswith("!update2"):
     if message.content == "!update2":
-        mainDict['apple']['is'] += 1
-        mainDict.update({'boi':1})
+        mainDict["apple"]["is"] += 1
+        mainDict.update({"boi":1})
         with open("dict.txt", "wb") as f:
             pickle.dump([mainDict, firstwords], f)
         msg = "Updated".format(message)
         await client.send_message(message.channel, msg)
-    
     
     
     
@@ -103,45 +112,12 @@ async def on_message(message):
             print("Censor activated, ignoring message")
             return
     
-    #Split the message into a list of the words
+    # Split the message into a list of the words
     messageWords = message.content.split()
     messageLength = len(messageWords)
     
     
     
-    #for i in range(0, messageLength):
-        
-        # Ignore messages where there's consecutive duplicates in order to prevent probability skewing
-        #currentWord = messageWords[i]
-        
-        #if (len(currentWord) > 9): # A maximum word length to prevent the bot from learning massive strings
-        #    print("A too long word detected, ignoring message")
-        #    return
-            
-        #if (i > 0): # Ignore the first word because there's nothing to compare it to
-        #    print("Comparing " + currentWord + " and " + previousWord)
-        #    if previousWord == currentWord:
-        #        print("Consecutive duplicates detected, ignoring message")
-        #        return
-            
-        # Ignore messages where a word appears more than 3 times in order to prevent probability skewing
-        #count = messageWords.count(currentWord)
-        #if count > 3:  
-        #    print("The same word appears too many times, ignoring message")
-        #    return
-        #previousWord = currentWord
-        
-        
-        
-    # At this point, everything should be OK with the message and the bot will process it
-    # Check the first word and either add it to the firstwords dictionary or increase its value by 1
-    
-    #if messageWords[0] not in firstwords:
-        #new_word = messageWords[0]
-        #firstwords.update({new_word: 1})
-        #mainDict.update({new_word: 1})
-    #else:
-        #firstwords[messageWords[0]] += 1
     if messageWords[0] not in tempDict:
         tempDict[messageWords[0]] = {}
     
@@ -150,15 +126,20 @@ async def on_message(message):
     except KeyError:
         firstwords[messageWords[0]] = 1
     
-    
+    # Start going through each word in the message
     for i in range(0, messageLength):
+        
         # --- FILTERS AND CENSORS ---
         currentWord = messageWords[i]
-        if (len(currentWord) > 9): # A maximum word length to prevent the bot from learning massive strings
+        
+        # A maximum word length to prevent the bot from learning massive strings
+        if (len(currentWord) > 11):
             print("A too long word detected, ignoring message")
             return
-            
-        if (i > 0): # Ignore the first word because there's nothing to compare it to
+        
+        # Ignore the first word because there's nothing to compare it to    
+        if (i > 0):
+            # Ignore messages where the same word appears twice in a row to prevent probability skewing
             print("Comparing " + currentWord + " and " + previousWord)
             if previousWord == currentWord:
                 print("Consecutive duplicates detected, ignoring message")
@@ -170,22 +151,14 @@ async def on_message(message):
             print("The same word appears too many times, ignoring message")
             return
         
+        
+        
         # --- STORING WORDS ---
         
         # Go through each word if there's more than 1
         if (messageLength > 1):
             # Skip over the first word since it has already been processed
-            
-            #for i in range(1, messageLength):
             if i > 0:
-                #print("Adding word by index " + str(i))
-                #previousWord = messageWords[i-1]
-                #currentWord = messageWords[i]
-                
-                #print("PREVIOUS WORD: " + previousWord)
-                #print("CURRENT WORD: " + currentWord)
-                
-                
                 # Add the current word into the main dictionary if needed
                 if currentWord not in tempDict:
                     tempDict[currentWord] = {}
@@ -196,30 +169,41 @@ async def on_message(message):
                 except KeyError:
                     tempDict[previousWord][currentWord] = 1
                 
-                #If word is the last of the message, add ENDSENTENCE to tag it as a word that can end a sentence    
+                # If word is the last of the message, add ENDSENTENCE to tag it as a word that can end a sentence    
                 if currentWord == messageWords[messageLength - 1]:
                     try:
-                        tempDict[currentWord]['ENDSENTENCE'] += 1
+                        tempDict[currentWord]["ENDSENTENCE"] += 1
                     except KeyError:
-                        tempDict[currentWord]['ENDSENTENCE'] = 1
+                        tempDict[currentWord]["ENDSENTENCE"] = 1
                         
         previousWord = currentWord
         
     mainDict = tempDict
         
-    # Save the new data into the files
+        
+        
+    # Update the files
     with open("dict.txt","wb") as f:
         pickle.dump([mainDict, firstwords], f)
         
-        
-        
-        
+    # Makes bot.commands work
+    await bot.process_commands(message)
+    
 
-@client.event
+
+@bot.command()
+async def speak():
+    await bot.say("Yes?")
+    #ctx.send("asd")
+
+
+
+@bot.event
 async def on_ready():
     print("Logged in as")
-    print(client.user.name)
-    print(client.user.id)
+    print(bot.user.name)
+    print(bot.user.id)
     print("------")
+    await bot.change_presence(game=discord.Game(name="a game"))
 
-client.run("NDgwODA0MjUyNzk3ODk0Njcy.Dzn-SQ.20mOWtrhA8R6BEFpxLyl3rf0LeE")
+bot.run("NDgwODA0MjUyNzk3ODk0Njcy.D2hM3g.N31qYqBC99XotEqpAorwsXIoYG4")
