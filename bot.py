@@ -2,11 +2,16 @@ import discord
 from discord.ext import commands
 import pickle
 import re
+from random import randint
 
 # ID:
 # Icon source:
 
 #client = discord.Client()
+
+# Contains the words that can start a sentence
+firstWords = {}
+# Contains the rest of the words
 mainDict = {}
 
 
@@ -17,7 +22,7 @@ bot = commands.Bot(command_prefix="¤", description=description)
 # Attempt to open the file that contains all learned words
 try:
     with open("dict.txt","rb") as f:
-        mainDict, firstwords = pickle.load(f)
+        mainDict, firstWords = pickle.load(f)
         print("Dict file loaded")
         
 # If file is not found, create a new one
@@ -25,11 +30,13 @@ except FileNotFoundError:
     with open("dict.txt","wb") as f:
         # Default dictionary. Will contain words that the bot "learns" from analyzing messages
         # These placeholder words are from sentences: "Apple is healthy" and "Cat is nice"
-        mainDict = {"apple": {"is": 1}, "cat": {"is": 1}, "is": {"healthy": 1, "nice": 1}, "healthy": {"ENDSENTENCE" : 1}, "nice": {"ENDSENTENCE" : 1}}
+        #mainDict = {"apple": {"is": 1}, "cat": {"is": 1}, "is": {"healthy": 1, "nice": 1}, "healthy": {"ENDSENTENCE" : 1}, "nice": {"ENDSENTENCE" : 1}}
+        
         # Contains the words that can start a sentence
-        firstwords = {"apple": 1,"cat": 1}
+        #firstWords = {"apple": 1,"cat": 1}
+        
         # Save the default words into the newly created file
-        pickle.dump([mainDict, firstwords], f)
+        pickle.dump([mainDict, firstWords], f)
         print("Dict file created")
 
 # Attempt to open the file that contains the censored words
@@ -53,7 +60,7 @@ except FileNotFoundError:
         # Naturally, any offensive words you wouldn't want the bot to say should be added
         
         #IF YOU EDIT THE CENSOR LIST, REMEMBER TO DELETE THE OLD CENSOR.TXT AND RESTART THE BOT'S SCRIPT
-        censor = ["@", "http", "ENDSENTENCE", "!debug-r", "!debug-u", "!update2"]
+        censor = ["@", "http", "ENDSENTENCE", "!debug-r", "!debug-u", "!update2", "¤speak"]
         
         pickle.dump(censor, f)
         print("Censor file created")
@@ -65,8 +72,13 @@ except FileNotFoundError:
 @bot.event
 async def on_message(message):
     
+    # Makes bot.commands work
+    await bot.process_commands(message)
+    
     # Using a temporary dictionary to prevent the bot from learning messages that do not pass the filters
     global mainDict
+    global firstWords
+    
     tempDict = mainDict
     # The bot will ignore messages from all bots, including itself
     if message.author.bot == True:
@@ -83,26 +95,9 @@ async def on_message(message):
             print(k, v)
         print("-----------")
         print("THE FIRST WORDS:")
-        for k, v in firstwords.items():
+        for k, v in firstWords.items():
             print(k, v)
         print("-----------------")
-    
-    if message.content == "!debug-u":
-        mainDict["apple"]["is"] += 1
-        with open("dict.txt", "wb") as f:
-            pickle.dump([mainDict, firstwords], f)
-            
-        msg = "Updated".format(message)
-        await client.send_message(message.channel, msg)
-        
-        
-    if message.content == "!update2":
-        mainDict["apple"]["is"] += 1
-        mainDict.update({"boi":1})
-        with open("dict.txt", "wb") as f:
-            pickle.dump([mainDict, firstwords], f)
-        msg = "Updated".format(message)
-        await client.send_message(message.channel, msg)
     
     
     
@@ -122,9 +117,9 @@ async def on_message(message):
         tempDict[messageWords[0]] = {}
     
     try:
-        firstwords[messageWords[0]] += 1
+        firstWords[messageWords[0]] += 1
     except KeyError:
-        firstwords[messageWords[0]] = 1
+        firstWords[messageWords[0]] = 1
     
     # Start going through each word in the message
     for i in range(0, messageLength):
@@ -133,12 +128,12 @@ async def on_message(message):
         currentWord = messageWords[i]
         
         # A maximum word length to prevent the bot from learning massive strings
-        if (len(currentWord) > 11):
+        if len(currentWord) > 11:
             print("A too long word detected, ignoring message")
             return
         
         # Ignore the first word because there's nothing to compare it to    
-        if (i > 0):
+        if i > 0:
             # Ignore messages where the same word appears twice in a row to prevent probability skewing
             print("Comparing " + currentWord + " and " + previousWord)
             if previousWord == currentWord:
@@ -150,7 +145,6 @@ async def on_message(message):
         if count > 3:  
             print("The same word appears too many times, ignoring message")
             return
-        
         
         
         # --- STORING WORDS ---
@@ -175,6 +169,11 @@ async def on_message(message):
                         tempDict[currentWord]["ENDSENTENCE"] += 1
                     except KeyError:
                         tempDict[currentWord]["ENDSENTENCE"] = 1
+        else:
+            try:
+                tempDict[currentWord]["ENDSENTENCE"] += 1
+            except KeyError:
+                tempDict[currentWord]["ENDSENTENCE"] = 1
                         
         previousWord = currentWord
         
@@ -184,18 +183,68 @@ async def on_message(message):
         
     # Update the files
     with open("dict.txt","wb") as f:
-        pickle.dump([mainDict, firstwords], f)
+        pickle.dump([mainDict, firstWords], f)
         
-    # Makes bot.commands work
-    await bot.process_commands(message)
+    # ADD RANDOM CHANCE TO SPEAK (CALL FORMULATE())
+        
     
 
 
 @bot.command()
 async def speak():
-    await bot.say("Yes?")
+    await formulate()
     #ctx.send("asd")
+    
 
+
+async def formulate():
+    sentence = ""
+    previous_word = ""
+    
+    # Choosing the first word
+    wordRandomizer = randint(1, sum(firstWords.values()))
+    
+    #print("  --START RANDOM--")
+    #print("      firstWords sum = " + str(sum(firstWords.values())))
+    #print("      random int = " + str(wordRandomizer))
+    #print("  --END RANDOM--")
+    
+    for key, value in firstWords.items():
+        #print("random before: " + str(wordRandomizer))
+        #print("value of " + key + ": " + str(value))
+        wordRandomizer -= value
+        #print("random after: " + str(wordRandomizer))
+        if wordRandomizer <= 0:
+            sentence += key + " "
+            previous_word = key
+            #print("  chosen word = " + key)
+            break
+        
+        
+    # Choosing the next words
+    looping = True
+    while looping:
+        nestedDict = mainDict[previous_word]
+        wordRandomizer = randint(1, sum(nestedDict.values()))
+        print("DICT: " + str(nestedDict) + " WITH SUM: " + str(sum(nestedDict.values())))
+        
+        for key, value in nestedDict.items():
+            print("KEY: " + key + ", VALUE: " + str(value))
+            wordRandomizer -= value
+            print("RANDOMIZER: " + str(wordRandomizer))
+            print("*********")
+            if wordRandomizer <= 0:
+                if key == "ENDSENTENCE":
+                    looping = False
+                    break
+                else:
+                    sentence += key + " "
+                    previous_word = key
+                    break
+    
+        
+    await bot.say(sentence)
+    #ctx.send("asd")
 
 
 @bot.event
@@ -206,4 +255,4 @@ async def on_ready():
     print("------")
     await bot.change_presence(game=discord.Game(name="a game"))
 
-bot.run("NDgwODA0MjUyNzk3ODk0Njcy.D2hM3g.N31qYqBC99XotEqpAorwsXIoYG4")
+bot.run("NDgwODA0MjUyNzk3ODk0Njcy.D2hmYw.7BR20tMprRG2ytfqFIra3beAfzM")
