@@ -4,40 +4,37 @@ import pickle
 import re
 from random import randint
 
-# ID:
-# Icon source:
 
-#client = discord.Client()
-
-# Contains the words that can start a sentence
-firstWords = {}
-# Contains the rest of the words
-mainDict = {}
+# These two dictionaries contain the words the bot "learns"
+firstWords = {} # Contains the words that can start a sentence
+mainDict = {} # Contains the rest of the words
 
 
 description = "A silly bot that pretends to learn to speak."
 bot = commands.Bot(command_prefix="¤", description=description)
 
 
-# Attempt to open the file that contains all learned words
+# --- LOADING FILES ---
+
+# Attempt to open the file that contains the dictionaries
 try:
     with open("dict.txt","rb") as f:
         mainDict, firstWords = pickle.load(f)
         print("Dict file loaded")
-        
+
 # If file is not found, create a new one
 except FileNotFoundError:
     with open("dict.txt","wb") as f:
-        # Default dictionary. Will contain words that the bot "learns" from analyzing messages
+        # Default dictionaries, used for testing if necessary
         # These placeholder words are from sentences: "Apple is healthy" and "Cat is nice"
-        #mainDict = {"apple": {"is": 1}, "cat": {"is": 1}, "is": {"healthy": 1, "nice": 1}, "healthy": {"ENDSENTENCE" : 1}, "nice": {"ENDSENTENCE" : 1}}
         
-        # Contains the words that can start a sentence
-        #firstWords = {"apple": 1,"cat": 1}
+        # mainDict = {"apple": {"is": 1}, "cat": {"is": 1}, "is": {"healthy": 1, "nice": 1}, "healthy": {"ENDSENTENCE" : 1}, "nice": {"ENDSENTENCE" : 1}}
+        # firstWords = {"apple": 1,"cat": 1}
         
-        # Save the default words into the newly created file
+        # Save the dictionaries into the newly created files
         pickle.dump([mainDict, firstWords], f)
         print("Dict file created")
+
 
 # Attempt to open the file that contains the censored words
 try:
@@ -45,22 +42,21 @@ try:
         censor = pickle.load(f)
     print("Censor file loaded")
     print(censor)
-    
+
 # If file is not found, create a new one
 except FileNotFoundError:
     with open("censor.txt","wb") as f:
         # The list of words that will cause the bot to ignore the message, AKA the censored words
         
-        # The censored words are (and maybe should be) as follows:
+        # The censored words are (and should be) as follows:
         # @, to prevent tagging and therefore directly notifying users
         # http, to prevent the bot from learning embedded links (such as linked images)
         # ENDSENTENCE, which the bot uses to tag words that are capable of ending a sentence
         # The bot's own commands, to keep the dictionary clean
+        # Any words you wouldn't want the bot to say
         
-        # Naturally, any offensive words you wouldn't want the bot to say should be added
-        
-        #IF YOU EDIT THE CENSOR LIST, REMEMBER TO DELETE THE OLD CENSOR.TXT AND RESTART THE BOT'S SCRIPT
-        censor = ["@", "http", "ENDSENTENCE", "!debug-r", "!debug-u", "!update2", "¤speak"]
+        # IF YOU EDIT THE CENSOR LIST, REMEMBER TO DELETE THE OLD CENSOR.TXT AND RESTART THE BOT'S SCRIPT
+        censor = ["@", "http", "ENDSENTENCE", "¤debug_r", "¤speak"]
         
         pickle.dump(censor, f)
         print("Censor file created")
@@ -72,50 +68,38 @@ except FileNotFoundError:
 @bot.event
 async def on_message(message):
     
-    # Makes bot.commands work
+    # Makes bot commands work
     await bot.process_commands(message)
     
-    # Using a temporary dictionary to prevent the bot from learning messages that do not pass the filters
     global mainDict
     global firstWords
     
+    # Using a temporary dictionary to prevent the bot from learning messages that do not pass the filters
     tempDict = mainDict
+    
+    
     # The bot will ignore messages from all bots, including itself
     if message.author.bot == True:
         print("Bot detected, ignoring message")
         return
-    
-            
-    # DEBUG COMMANDS
-    
-    if message.content == "!debug-r":
-        print("-----------------")
-        print("THE MAIN DICTIONARY:")
-        for k, v in mainDict.items():
-            print(k, v)
-        print("-----------")
-        print("THE FIRST WORDS:")
-        for k, v in firstWords.items():
-            print(k, v)
-        print("-----------------")
-    
-    
     
     # Check the message for censored words, ignore it if a censored word is discovered
     for censored in censor:
         if (re.search("(" + censored + ")", message.content, flags=0) is not None):
             print("Censor activated, ignoring message")
             return
+        
     
     # Split the message into a list of the words
     messageWords = message.content.split()
     messageLength = len(messageWords)
     
     
-    
+    # If the first word doesn't have its own nested dictionary in the main dictionary, add one
     if messageWords[0] not in tempDict:
         tempDict[messageWords[0]] = {}
     
+    # Update first word's appearance count
     try:
         firstWords[messageWords[0]] += 1
     except KeyError:
@@ -128,21 +112,20 @@ async def on_message(message):
         currentWord = messageWords[i]
         
         # A maximum word length to prevent the bot from learning massive strings
-        if len(currentWord) > 11:
+        if len(currentWord) > 13:
             print("A too long word detected, ignoring message")
             return
         
         # Ignore the first word because there's nothing to compare it to    
         if i > 0:
             # Ignore messages where the same word appears twice in a row to prevent probability skewing
-            print("Comparing " + currentWord + " and " + previousWord)
             if previousWord == currentWord:
                 print("Consecutive duplicates detected, ignoring message")
                 return
             
         # Ignore messages where a word appears more than 3 times in order to prevent probability skewing
         count = messageWords.count(currentWord)
-        if count > 3:  
+        if count > 4:  
             print("The same word appears too many times, ignoring message")
             return
         
@@ -177,74 +160,93 @@ async def on_message(message):
                         
         previousWord = currentWord
         
+    # tempDict is temporary no longer
     mainDict = tempDict
-        
-        
         
     # Update the files
     with open("dict.txt","wb") as f:
         pickle.dump([mainDict, firstWords], f)
-        
-    # ADD RANDOM CHANCE TO SPEAK (CALL FORMULATE())
-        
+    
+    # Giving the bot a random chance to speak on its own
+    if randint(1, 29) == 1:
+        sentence = await formulate()
+        await bot.send_message(message.channel, sentence)
     
 
 
-@bot.command()
-async def speak():
-    await formulate()
-    #ctx.send("asd")
     
 
-
+# The function for formulating sentences
 async def formulate():
-    sentence = ""
-    previous_word = ""
+    sentence = "" # The sentence which will be formulated
+    previousWord = "" # The previous word that will be used to choose the next one
+    wordLimit = 79 # 80 minus the first word
     
-    # Choosing the first word
+    # Choosing the first word (randomly, of course)
     wordRandomizer = randint(1, sum(firstWords.values()))
     
-    #print("  --START RANDOM--")
-    #print("      firstWords sum = " + str(sum(firstWords.values())))
-    #print("      random int = " + str(wordRandomizer))
-    #print("  --END RANDOM--")
-    
     for key, value in firstWords.items():
-        #print("random before: " + str(wordRandomizer))
-        #print("value of " + key + ": " + str(value))
+        
         wordRandomizer -= value
-        #print("random after: " + str(wordRandomizer))
         if wordRandomizer <= 0:
+            # The word has been found and will be added to the sentence
             sentence += key + " "
-            previous_word = key
-            #print("  chosen word = " + key)
+            previousWord = key
             break
         
         
-    # Choosing the next words
+    # Choosing the next words (randomly, of course)
     looping = True
     while looping:
-        nestedDict = mainDict[previous_word]
-        wordRandomizer = randint(1, sum(nestedDict.values()))
-        print("DICT: " + str(nestedDict) + " WITH SUM: " + str(sum(nestedDict.values())))
-        
+        nestedDict = mainDict[previousWord] # Find the word's nested dictionary, which tells us which words can go next
+        wordRandomizer = randint(1, sum(nestedDict.values())) # For choosing one of the words
+
         for key, value in nestedDict.items():
-            print("KEY: " + key + ", VALUE: " + str(value))
+            # For each next word candidate, their appearance count is reduced from the randomized number
             wordRandomizer -= value
-            print("RANDOMIZER: " + str(wordRandomizer))
-            print("*********")
+            # Once the randomized number is zero or less, the word will be chosen
             if wordRandomizer <= 0:
+                # If the chosen word happens to be ENDSENTENCE, the formulation will end
                 if key == "ENDSENTENCE":
                     looping = False
                     break
                 else:
+                    # Add the chosen word to the sentence
                     sentence += key + " "
-                    previous_word = key
+                    
+                    # Check the word limit
+                    wordLimit -= 1
+                    if wordLimit == 0:
+                        looping = False
+                        
+                    previousWord = key
                     break
     
-        
+    # Return the finished sentence
+    return sentence
+    
+    
+
+# --- COMMANDS ---
+    
+# A command to make the bot speak manually in the server where the command was used
+@bot.command()
+async def speak():
+    sentence = await formulate()
     await bot.say(sentence)
-    #ctx.send("asd")
+   
+# A debug command that prints the dictionary contents into the console
+@bot.command()
+async def debug_r():
+    print("-----------------")
+    print("THE MAIN DICTIONARY:")
+    for k, v in mainDict.items():
+        print(k, v)
+    print("-----------")
+    print("THE FIRST WORDS:")
+    for k, v in firstWords.items():
+        print(k, v)
+    print("-----------------")
 
 
 @bot.event
@@ -253,6 +255,6 @@ async def on_ready():
     print(bot.user.name)
     print(bot.user.id)
     print("------")
-    await bot.change_presence(game=discord.Game(name="a game"))
+    await bot.change_presence(game=discord.Game(name="¤speak"))
 
-bot.run("NDgwODA0MjUyNzk3ODk0Njcy.D2hmYw.7BR20tMprRG2ytfqFIra3beAfzM")
+bot.run("BOT TOKEN HERE")
