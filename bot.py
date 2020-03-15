@@ -1,3 +1,5 @@
+# -*- coding: utf-8 -*-
+
 import discord
 from discord.ext import commands
 import pickle
@@ -60,8 +62,6 @@ except FileNotFoundError:
         
         pickle.dump(censor, f)
         print("Censor file created")
-
-
 
 
 # The event where someone in the discord server sends a message, allowing the bot to process it
@@ -170,7 +170,7 @@ async def on_message(message):
     # Giving the bot a random chance to speak on its own
     if randint(1, 29) == 1:
         sentence = await formulate()
-        await bot.send_message(message.channel, sentence)
+        await message.channel.send(sentence)
     
 
 
@@ -199,28 +199,32 @@ async def formulate():
     looping = True
     while looping:
         nestedDict = mainDict[previousWord] # Find the word's nested dictionary, which tells us which words can go next
-        wordRandomizer = randint(1, sum(nestedDict.values())) # For choosing one of the words
+        nestedDictValues = sum(nestedDict.values())
+        if nestedDictValues != 1:
+            wordRandomizer = randint(1, nestedDictValues) # For choosing one of the words
 
-        for key, value in nestedDict.items():
-            # For each next word candidate, their appearance count is reduced from the randomized number
-            wordRandomizer -= value
-            # Once the randomized number is zero or less, the word will be chosen
-            if wordRandomizer <= 0:
-                # If the chosen word happens to be ENDSENTENCE, the formulation will end
-                if key == "ENDSENTENCE":
-                    looping = False
-                    break
-                else:
-                    # Add the chosen word to the sentence
-                    sentence += key + " "
-                    
-                    # Check the word limit
-                    wordLimit -= 1
-                    if wordLimit == 0:
+            for key, value in nestedDict.items():
+                # For each next word candidate, their appearance count is reduced from the randomized number
+                wordRandomizer -= value
+                # Once the randomized number is zero or less, the word will be chosen
+                if wordRandomizer <= 0:
+                    # If the chosen word happens to be ENDSENTENCE, the formulation will end
+                    if key == "ENDSENTENCE":
                         looping = False
+                        break
+                    else:
+                        # Add the chosen word to the sentence
+                        sentence += key + " "
                         
-                    previousWord = key
-                    break
+                        # Check the word limit
+                        wordLimit -= 1
+                        if wordLimit == 0:
+                            looping = False
+                            
+                        previousWord = key
+                        break
+        else:
+            break
     
     # Return the finished sentence
     return sentence
@@ -231,9 +235,9 @@ async def formulate():
     
 # A command to make the bot speak manually in the server where the command was used
 @bot.command()
-async def speak():
+async def speak(ctx):
     sentence = await formulate()
-    await bot.say(sentence)
+    await ctx.send(sentence)
    
 # A debug command that prints the dictionary contents into the console
 @bot.command()
@@ -255,6 +259,7 @@ async def on_ready():
     print(bot.user.name)
     print(bot.user.id)
     print("------")
-    await bot.change_presence(game=discord.Game(name="¤speak"))
+    game = discord.Game("¤speak")
+    await bot.change_presence(activity=game)
 
 bot.run("BOT TOKEN HERE")
