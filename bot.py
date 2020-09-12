@@ -8,10 +8,15 @@ import redis
 # Contains the list of censored words, the max word and sentence length and the discord bot token
 import config
 
-db = redis.Redis(host='localhost', port=6379, charset="utf-8", decode_responses=True)
+db = redis.Redis(
+    host = config.redisHost,
+    port = config.redisPort,
+    charset = 'utf-8',
+    decode_responses = True
+)
 
-description = "A silly bot that pretends to learn to speak."
-bot = commands.Bot(command_prefix="¤", description=description)
+description = 'A silly bot that pretends to learn to speak.'
+bot = commands.Bot(command_prefix = '¤', description = description)
 
 @bot.event
 async def on_message(message):
