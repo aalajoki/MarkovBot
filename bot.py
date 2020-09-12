@@ -2,7 +2,6 @@
 
 import discord
 from discord.ext import commands
-import pickle
 import re
 from random import randint
 import redis
