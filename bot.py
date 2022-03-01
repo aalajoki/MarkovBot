@@ -70,22 +70,27 @@ def listen(message):
             db.sadd(messageWords[i], 'ENDSENTENCE')
 
 # The function for formulating sentences
-def formulateSentence(userFirstWord = None):
+def formulateSentence(userWords = None):
     sentence = ''
     # argument OR db.srandmember()
     # firstWord = db.srandmember('FirstWords')
 
-    firstWord = db.srandmember('FirstWords') if userFirstWord is None else userFirstWord
-    sentence += firstWord
+    print(userWords)
+
+    if userWords:
+        firstWord = userWords[-1]
+        sentence = ' '.join(userWords)
+    else:
+        firstWord = db.srandmember('FirstWords')
+
     sentenceLength = 1
 
     previousWord = firstWord
 
     while True:
-        # nextWord = db.srandmember(previousWord)
         nextWord = getNextWord(previousWord)
 
-        if (nextWord == 'ENDSENTENCE'):
+        if (nextWord == 'ENDSENTENCE' or nextWord is None):
             return sentence
         else:
             sentence += ' ' + nextWord
@@ -115,7 +120,7 @@ async def speak(ctx, arg = None):
             else:
                 sentence = 'I have no idea'
         else:
-            sentence = formulateSentence(lastWord)
+            sentence = formulateSentence(userWords)
             # Combine the original user words with the formulated sentence, but with a space between
             # sentence = f'{arg} {formulatedSentence}'
     else:
