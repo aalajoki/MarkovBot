@@ -70,16 +70,20 @@ def listen(message):
             db.sadd(messageWords[i], 'ENDSENTENCE')
 
 # The function for formulating sentences
-def formulateSentence():
+def formulateSentence(userFirstWord = None):
     sentence = ''
-    firstWord = db.srandmember('FirstWords')
+    # argument OR db.srandmember()
+    # firstWord = db.srandmember('FirstWords')
+
+    firstWord = db.srandmember('FirstWords') if userFirstWord is None else userFirstWord
     sentence += firstWord
     sentenceLength = 1
 
     previousWord = firstWord
 
     while True:
-        nextWord = db.srandmember(previousWord)
+        # nextWord = db.srandmember(previousWord)
+        nextWord = getNextWord(previousWord)
 
         if (nextWord == 'ENDSENTENCE'):
             return sentence
@@ -90,11 +94,34 @@ def formulateSentence():
             if (sentenceLength >= config.maxSentenceLength):
                 return sentence
 
+def getNextWord(userWord):
+    word = db.srandmember(userWord)
+    return word
+
 # --- COMMANDS ---
 # A command to make the bot speak manually in the server where the command was used
+# Giving arguments will make the bot complete the given sentence
 @bot.command()
-async def speak(ctx):
-    sentence = formulateSentence()
+async def speak(ctx, arg = None):
+    if arg and len(arg) <= 200:
+        # User has given words to complete
+        userWords = arg.split()
+        lastWord = userWords[-1]
+        if (lastWord == 'is' or lastWord == 'are'):
+            # Combine the original user words with one word only, but with a space between
+            nextWord = getNextWord(lastWord)
+            if nextWord:
+                sentence = f'{arg} {nextWord}'
+            else:
+                sentence = 'I have no idea'
+        else:
+            sentence = formulateSentence(lastWord)
+            # Combine the original user words with the formulated sentence, but with a space between
+            # sentence = f'{arg} {formulatedSentence}'
+    else:
+        # No words given, formulate normally
+        sentence = formulateSentence()
+    # Send the final sentence to the server & channel where the command was used
     await ctx.send(sentence)
 
 @bot.event
